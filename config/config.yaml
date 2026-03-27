@@ -1,0 +1,45 @@
+# JavisVoice Konfiguration
+
+# Wake Word
+wake_word:
+  engine: "porcupine"          # Wake word engine
+  keyword: "jarvis"            # Wake word ("jarvis" oder "hey jarvis")
+  sensitivity: 0.5             # 0.0 (am meisten) bis 1.0 (am wenigsten)
+  access_key: "YOUR_PICOVOICE_ACCESS_KEY"  # Picovoice Access Key (kostenlos)
+
+# Audio
+audio:
+  sample_rate: 16000           # Whispers erwartet 16kHz
+  chunk_size: 512              # Audio chunk size
+  channels: 1                  # Mono
+  format: "int16"              # 16-bit signed integer
+  device_index: -1             # -1 = Default Mikrofon
+
+# VAD (Voice Activity Detection)
+vad:
+  aggressiveness: 3             # 0-3 (3 = aggressivste)
+  frame_duration_ms: 30         # 10, 20, oder 30 ms
+  silence_threshold_ms: 1500     # Stille vor Ende der Aufnahme
+
+# STT (Speech-to-Text)
+stt:
+  model: "medium"               # tiny, small, medium, large
+  language: "de"               # Deutsch
+  device: "cpu"                # cpu oder cuda
+
+# TTS (Text-to-Speech)
+tts:
+  model: "tts_models/de/thorsten/vits"
+  output_file: "/tmp/javis_response.wav"
+
+# OpenClaw API
+openclaw:
+  gateway_url: "http://localhost:18789"  # OpenClaw Gateway
+  api_key: ""                    # Falls benötigt
+  session_id: "javis-pi-001"     # Persistente Session-ID
+
+# GPIO (optional)
+gpio:
+  led_feedback: 4                # BCM Pin für LED
+  button_exit: 17                 # BCM Pin für Exit-Button (optional)
+  enabled: false                 # true = GPIO aktivieren
