@@ -34,9 +34,20 @@ tts:
 
 # OpenClaw API
 openclaw:
-  gateway_url: "http://localhost:18789"  # OpenClaw Gateway
-  api_key: ""                    # Falls benötigt
-  session_id: "javis-pi-001"     # Persistente Session-ID
+  gateway_url: "http://localhost:18789"  # HTTP Modus
+  #api_key: ""                           # Falls benötigt
+  #session_id: "javis-pi-001"           # Persistente Session-ID
+
+# RabbitMQ (optional - Alternative zu HTTP)
+# Wenn aktiv, wird RabbitMQ statt HTTP verwendet
+rabbitmq:
+  enabled: false                         # true = RabbitMQ, false = HTTP
+  host: "openclaw-server.local"          # Host wo RabbitMQ läuft
+  port: 5672
+  username: "guest"
+  password: "guest"
+  queue: "javis.voice.in"                # Pi → OpenClaw
+  reply_queue: "javis.voice.out"         # OpenClaw → Pi
 
 # GPIO (optional)
 gpio:

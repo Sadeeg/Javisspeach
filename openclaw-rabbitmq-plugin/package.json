@@ -1,0 +1,18 @@
+{
+  "name": "@sadeeg/rabbitmq-voice",
+  "version": "0.1.0",
+  "description": "RabbitMQ voice interface plugin for OpenClaw",
+  "main": "index.ts",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {
+    "amqplib": "^0.10.4"
+  },
+  "keywords": [
+    "openclaw",
+    "rabbitmq",
+    "voice",
+    "javisvoice"
+  ]
+}

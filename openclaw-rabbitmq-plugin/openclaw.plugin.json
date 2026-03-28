@@ -1,0 +1,56 @@
+{
+  "id": "rabbitmq-voice",
+  "name": "RabbitMQ Voice Interface",
+  "description": "RabbitMQ consumer for JavisVoice. Consumes voice/text messages from a queue and processes them through OpenClaw. Use when JavisVoice on Raspberry Pi should communicate via RabbitMQ instead of HTTP.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "host": {
+        "type": "string",
+        "default": "localhost"
+      },
+      "port": {
+        "type": "number",
+        "default": 5672
+      },
+      "username": {
+        "type": "string",
+        "default": "guest"
+      },
+      "password": {
+        "type": "string",
+        "default": "guest"
+      },
+      "queue": {
+        "type": "string",
+        "default": "javis.voice.in"
+      },
+      "replyQueue": {
+        "type": "string",
+        "default": "javis.voice.out"
+      },
+      "vhost": {
+        "type": "string",
+        "default": "/"
+      },
+      "prefetch": {
+        "type": "number",
+        "default": 1
+      },
+      "sessionTimeoutMs": {
+        "type": "number",
+        "default": 30000
+      }
+    }
+  },
+  "uiHints": {
+    "host": { "label": "RabbitMQ Host" },
+    "port": { "label": "Port" },
+    "username": { "label": "Username" },
+    "password": { "label": "Password", "sensitive": true },
+    "queue": { "label": "Inbound Queue" },
+    "replyQueue": { "label": "Reply Queue" }
+  }
+}
