@@ -31,16 +31,19 @@ let channel: amqp.Channel | null = null;
 let isConsuming = false;
 
 function getConfig(api: any): any {
-  const cfg = api.config as any;
+  // Plugin config may be at api.config or api.config.plugins.entries['rabbitmq-voice'].config
+  const fullCfg = api.config as any;
+  const pluginCfg = fullCfg?.plugins?.entries?.['rabbitmq-voice']?.config ?? fullCfg ?? {};
+  
   return {
-    host: cfg?.host ?? 'localhost',
-    port: cfg?.port ?? 5672,
-    username: cfg?.username ?? 'guest',
-    password: cfg?.password ?? 'guest',
-    queue: cfg?.queue ?? 'javis.voice.in',
-    replyQueue: cfg?.replyQueue ?? 'javis.voice.out',
-    vhost: cfg?.vhost ?? '/',
-    prefetch: cfg?.prefetch ?? 1,
+    host: pluginCfg.host ?? 'localhost',
+    port: pluginCfg.port ?? 5672,
+    username: pluginCfg.username ?? 'guest',
+    password: pluginCfg.password ?? 'guest',
+    queue: pluginCfg.queue ?? 'javis.voice.in',
+    replyQueue: pluginCfg.replyQueue ?? 'javis.voice.out',
+    vhost: pluginCfg.vhost ?? '/',
+    prefetch: pluginCfg.prefetch ?? 1,
   };
 }
 

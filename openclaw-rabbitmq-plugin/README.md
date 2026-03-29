@@ -1,87 +1,55 @@
-# RabbitMQ Voice Plugin für OpenClaw
+# OpenClaw RabbitMQ Voice Plugin
 
 **Plugin-ID:** `rabbitmq-voice`
 
-Ermöglicht JavisVoice auf dem Raspberry Pi, über RabbitMQ mit OpenClaw zu kommunizieren, statt über HTTP.
+RabbitMQ Integration für JavisVoice. Ermöglicht Kommunikation über AMQP statt HTTP.
 
 ## Architektur
 
 ```
-[JavisVoice Pi] ──AMQP──> [javis.voice.in queue]
-                              │
-                              ▼
-                    [OpenClaw RabbitMQ Plugin]
-                              │
-                              │ (processes message)
-                              ▼
-                       [OpenClaw Agent]
-                              │
-                              │ (response)
-                              ▼
-                    [javis.voice.out queue]
-                              │
-                              ▼
-[JavisVoice Pi] ◀──AMQP── (receives response, TTS plays)
-```
-
-## Installation
-
-### 1. RabbitMQ installieren (falls noch nicht vorhanden)
-
-```bash
-# Auf dem Server:
-sudo apt install rabbitmq-server
-sudo systemctl enable rabbitmq-server
-sudo systemctl start rabbitmq-server
-```
-
-### 2. Plugin installieren
-
-```bash
-# In deinem Workspace:
-cd /home/sascha/.openclaw/workspace/Javisspeach/openclaw-rabbitmq-plugin
-
-# Abhängigkeiten installieren
-npm install
-
-# Oder direkt in OpenClaw installieren:
-openclaw plugins install ./openclaw-rabbitmq-plugin
-```
-
-### 3. Konfiguration
-
-In `openclaw.json` oder über `openclaw config`:
-
-```json
-{
-  "plugins": {
-    "entries": {
-      "rabbitmq-voice": {
-        "enabled": true,
-        "config": {
-          "host": "localhost",
-          "port": 5672,
-          "username": "guest",
-          "password": "guest",
-          "queue": "javis.voice.in",
-          "replyQueue": "javis.voice.out"
-        }
-      }
-    }
-  }
-}
-```
-
-Oder mit CLI:
-```bash
-openclaw config set plugins.entries.rabbitmq-voice.enabled true
-# ... etc
-```
-
-### 4. Gateway neustarten
-
-```bash
-openclaw gateway restart
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        JavisVoice (Raspberry Pi)                          │
+│  ┌─────────────┐    ┌───────────┐    ┌─────────┐    ┌──────────────────┐ │
+│  │  Wake Word  │───▶│   VAD     │───▶│ Whisper │───▶│ RabbitMQ Client │ │
+│  │ (Porcupine) │    │ (webrtc)  │    │  (STT)  │    │  send_and_wait()│ │
+│  └─────────────┘    └───────────┘    └─────────┘    └────────┬─────────┘ │
+│                                                               │           │
+│  ◀────────────────── TTS Playback ◀───────────────────────────┘           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ AMQP
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              RabbitMQ Server                                 │
+│                         localhost:5672 (AMQP)                               │
+│                         localhost:15672 (Management UI)                     │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                        Queues                                        │  │
+│  │  • javis.voice.in  (Pi → OpenClaw)                                  │  │
+│  │  • javis.voice.out (OpenClaw → Pi)                                 │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ AMQP Consumer
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           OpenClaw Gateway                                  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                   rabbitmq-voice Plugin                              │  │
+│  │  • Service: Connection + Consumer Lifecycle                         │  │
+│  │  • Channel: Outbound messaging                                      │  │
+│  │  • RPC: Status + Manual Publish                                     │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                                    │                                        │
+│                                    │ Session Routing                         │
+│                                    ▼                                        │
+│                         ┌─────────────────────┐                            │
+│                         │   OpenClaw Agent    │                            │
+│                         │   (Javis/LLM)       │                            │
+│                         └─────────────────────┘                            │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Message Format
@@ -93,7 +61,7 @@ Queue: `javis.voice.in`
 ```json
 {
   "sessionId": "pi-001-abc123",
-  "text": "Wie wird das Wetter morgen?",
+  "text": "Hallo Javis, wie wird das Wetter morgen?",
   "timestamp": 1743168000000
 }
 ```
@@ -110,125 +78,155 @@ Queue: `javis.voice.out`
 }
 ```
 
-## JavisVoice anpassen
+## Installation
 
-In JavisVoice `src/api/rabbitmq_client.py` erstellen:
+### 1. RabbitMQ Server
 
-```python
-#!/usr/bin/env python3
-"""RabbitMQ Client für JavisVoice"""
-
-import pika
-import json
-import uuid
-
-class JavisRabbitMQ:
-    def __init__(self, host='openclaw-server.local', queue='javis.voice.in', 
-                 reply_queue='javis.voice.out'):
-        self.host = host
-        self.queue = queue
-        self.reply_queue = reply_queue
-        self.connection = None
-        self.channel = None
-        self.session_id = str(uuid.uuid4())[:8]
-    
-    def connect(self):
-        credentials = pika.PlainCredentials('guest', 'guest')
-        parameters = pika.ConnectionParameters(
-            host=self.host,
-            credentials=credentials
-        )
-        self.connection = pika.BlockingConnection(parameters)
-        self.channel = self.connection.channel()
-        
-        # Ensure queues exist
-        self.channel.queue_declare(queue=self.queue, durable=True)
-        self.channel.queue_declare(queue=self.reply_queue, durable=True)
-    
-    def send_and_wait(self, text, timeout=30):
-        """Send message and wait for response"""
-        # Set up consumer for reply queue
-        response = [None]
-        
-        def callback(ch, method, properties, body):
-            msg = json.loads(body)
-            if msg.get('sessionId') == self.session_id:
-                response[0] = msg.get('response')
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                ch.stop_consuming()
-        
-        self.channel.basic_consume(
-            queue=self.reply_queue,
-            on_message_callback=callback
-        )
-        
-        # Publish message
-        message = {
-            'sessionId': self.session_id,
-            'text': text,
-            'timestamp': int(time.time() * 1000)
-        }
-        
-        self.channel.basic_publish(
-            exchange='',
-            routing_key=self.queue,
-            body=json.dumps(message),
-            properties=pika.BasicProperties(delivery_mode=2)
-        )
-        
-        # Start consuming (with timeout)
-        self.channel.start_consuming(timeout=timeout)
-        
-        return response[0]
-    
-    def close(self):
-        if self.connection:
-            self.connection.close()
+```bash
+# Docker (empfohlen)
+docker run -d \
+  --name javis-rabbitmq \
+  -p 5672:5672 \
+  -p 15672:15672 \
+  -e RABBITMQ_DEFAULT_USER=javis \
+  -e RABBITMQ_DEFAULT_PASS=javis123 \
+  rabbitmq:3-management
 ```
+
+Oder ohne Docker:
+```bash
+sudo apt install rabbitmq-server
+```
+
+### 2. Plugin installieren
+
+```bash
+cd /path/to/Javisspeach
+openclaw plugins install ./openclaw-rabbitmq-plugin
+```
+
+### 3. Konfiguration
+
+```bash
+# Gateway neustarten
+openclaw gateway restart
+
+# Config setzen
+openclaw config set plugins.entries.rabbitmq-voice.enabled true
+openclaw config set plugins.entries.rabbitmq-voice.config.host localhost
+openclaw config set plugins.entries.rabbitmq-voice.config.port 5672
+openclaw config set plugins.entries.rabbitmq-voice.config.username test
+openclaw config set plugins.entries.rabbitmq-voice.config.password test123
+openclaw config set plugins.entries.rabbitmq-voice.config.queue javis.voice.in
+openclaw config set plugins.entries.rabbitmq-voice.config.replyQueue javis.voice.out
+```
+
+Oder direkt in `openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "rabbitmq-voice": {
+        "enabled": true,
+        "config": {
+          "host": "localhost",
+          "port": 5672,
+          "username": "test",
+          "password": "test123",
+          "queue": "javis.voice.in",
+          "replyQueue": "javis.voice.out"
+        }
+      }
+    }
+  }
+}
+```
+
+### 4. Gateway neustarten
+
+```bash
+openclaw gateway restart
+```
+
+## Konfiguration Reference
+
+| Parameter | Default | Beschreibung |
+|-----------|---------|---------------|
+| `host` | `localhost` | RabbitMQ Server Host |
+| `port` | `5672` | AMQP Port |
+| `username` | `guest` | AMQP Username |
+| `password` | `guest` | AMQP Password |
+| `queue` | `javis.voice.in` | Inbound Queue (Pi → OpenClaw) |
+| `replyQueue` | `javis.voice.out` | Outbound Queue (OpenClaw → Pi) |
+| `vhost` | `/` | Virtual Host |
+| `prefetch` | `1` | Prefetch Count |
+
+## Benutzer erstellen (falls nötig)
+
+```bash
+# Im RabbitMQ Container
+docker exec javis-rabbitmq rabbitmqctl add_user test test123
+docker exec javis-rabbitmq rabbitmqctl set_permissions -p / test ".*" ".*" ".*"
+```
+
+## Status prüfen
+
+```bash
+# Gateway Logs
+tail -f /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log | grep rabbitmq
+
+# Plugin Status via RPC
+openclaw gateway rpc rabbitmq-voice.status
+```
+
+## Management UI
+
+RabbitMQ Management Interface: http://localhost:15672
+
+- User: `javis` / `javis123`
+- Queues beobachten
+- Messages inspecten
 
 ## Troubleshooting
 
 ### Plugin startet nicht
 
 ```bash
-# Status prüfen
+# Logs prüfen
+tail -50 /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log
+
+# Doctor
 openclaw plugins doctor
-
-# Logs ansehen
-openclaw gateway logs --tail 50
 ```
 
-### Keine Verbindung zu RabbitMQ
+### Access refused
 
 ```bash
-# RabbitMQ Status prüfen
-sudo systemctl status rabbitmq-server
-
-# Ports prüfen
-ss -tlnp | grep 5672
+# Benutzer und Rechte prüfen
+docker exec javis-rabbitmq rabbitmqctl list_users
+docker exec javis-rabbitmq rabbitmqctl list_permissions -p /
 ```
 
-### Queue nicht gefunden
+### Verbindung verloren
+
+Plugin versucht automatisch wiederzuverbinden. Bei dauerhaften Problemen Gateway neustarten:
 
 ```bash
-# RabbitMQ Management UI
-sudo rabbitmq-plugins enable rabbitmq_management
-# Dann: http://localhost:15672 (guest/guest)
-```
-
-## Status prüfen
-
-```bash
-# Gateway Method aufrufen
-openclaw gateway rpc rabbitmq-voice.status
+openclaw gateway restart
 ```
 
 ## Dateien
 
 ```
 openclaw-rabbitmq-plugin/
-├── openclaw.plugin.json   # Plugin Manifest
-├── index.ts               # Hauptplugin
-├── package.json           # NPM Package
-└── README.md              # Diese Datei
+├── openclaw.plugin.json   # Plugin Manifest + Config Schema
+├── index.ts              # TypeScript Plugin Source
+├── package.json          # NPM Package
+└── README.md             # Diese Datei
 ```
+
+## Siehe auch
+
+- [JavisVoice README](../README.md) - Hauptprojekt
+- [RabbitMQ Client](../src/api/rabbitmq_client.py) - Python Client für Pi

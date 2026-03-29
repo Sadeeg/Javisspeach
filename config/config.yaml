@@ -1,13 +1,18 @@
 # JavisVoice Konfiguration
+# =========================
 
-# Wake Word
+# ============================================
+# WAKE WORD (Porcupine)
+# ============================================
 wake_word:
   engine: "porcupine"          # Wake word engine
   keyword: "jarvis"            # Wake word ("jarvis" oder "hey jarvis")
   sensitivity: 0.5             # 0.0 (am meisten) bis 1.0 (am wenigsten)
   access_key: "YOUR_PICOVOICE_ACCESS_KEY"  # Picovoice Access Key (kostenlos)
 
-# Audio
+# ============================================
+# AUDIO SETTINGS
+# ============================================
 audio:
   sample_rate: 16000           # Whispers erwartet 16kHz
   chunk_size: 512              # Audio chunk size
@@ -15,42 +20,72 @@ audio:
   format: "int16"              # 16-bit signed integer
   device_index: -1             # -1 = Default Mikrofon
 
+# ============================================
 # VAD (Voice Activity Detection)
+# ============================================
 vad:
   aggressiveness: 3             # 0-3 (3 = aggressivste)
   frame_duration_ms: 30         # 10, 20, oder 30 ms
-  silence_threshold_ms: 1500     # Stille vor Ende der Aufnahme
+  silence_threshold_ms: 1500    # Stille vor Ende der Aufnahme
 
+# ============================================
 # STT (Speech-to-Text)
+# ============================================
 stt:
-  model: "medium"               # tiny, small, medium, large
+  model: "medium"              # tiny, small, medium, large
   language: "de"               # Deutsch
   device: "cpu"                # cpu oder cuda
 
+# ============================================
 # TTS (Text-to-Speech)
+# ============================================
 tts:
   model: "tts_models/de/thorsten/vits"
   output_file: "/tmp/javis_response.wav"
 
-# OpenClaw API
+# ============================================
+# KOMMUNIKATION MIT OPENCLAW
+# ============================================
+# Wähle EINE der beiden Optionen:
+
+# Option 1: HTTP (Standard)
+# - Einfach, aber bei Netzwerkproblemen gehen Nachrichten verloren
 openclaw:
-  gateway_url: "http://localhost:18789"  # HTTP Modus
-  #api_key: ""                           # Falls benötigt
-  #session_id: "javis-pi-001"           # Persistente Session-ID
+  gateway_url: "http://OPENCLAW_HOST:18789"  # Host wo OpenClaw Gateway läuft
+  #api_key: ""                                # Falls benötigt
+  #session_id: "javis-pi-001"                 # Persistente Session-ID
 
-# RabbitMQ (optional - Alternative zu HTTP)
-# Wenn aktiv, wird RabbitMQ statt HTTP verwendet
+# Option 2: RabbitMQ (Robust)
+# - Messages werden gepuffert, auch bei kurzzeitigen Ausfällen
+# - Siehe openclaw-rabbitmq-plugin/README.md für Server-Setup
 rabbitmq:
-  enabled: false                         # true = RabbitMQ, false = HTTP
-  host: "openclaw-server.local"          # Host wo RabbitMQ läuft
+  enabled: false                         # true = RabbitMQ nutzen, false = HTTP
+  host: "RABBITMQ_HOST"                  # Host wo RabbitMQ läuft
   port: 5672
-  username: "guest"
-  password: "guest"
-  queue: "javis.voice.in"                # Pi → OpenClaw
-  reply_queue: "javis.voice.out"         # OpenClaw → Pi
+  username: "test"
+  password: "test123"
+  queue: "javis.voice.in"               # Pi → OpenClaw
+  reply_queue: "javis.voice.out"        # OpenClaw → Pi
 
+# ============================================
 # GPIO (optional)
+# ============================================
 gpio:
   led_feedback: 4                # BCM Pin für LED
   button_exit: 17                 # BCM Pin für Exit-Button (optional)
-  enabled: false                 # true = GPIO aktivieren
+  enabled: false                  # true = GPIO aktivieren
+
+# ============================================
+# BEISPIEL-KONFIGURATIONEN
+# ============================================
+
+# --- HTTP Modus (lokal) ---
+# openclaw:
+#   gateway_url: "http://localhost:18789"
+
+# --- RabbitMQ Modus (Netzwerk) ---
+# rabbitmq:
+#   enabled: true
+#   host: "192.168.1.100"
+#   username: "test"
+#   password: "test123"

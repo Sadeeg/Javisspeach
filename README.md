@@ -8,6 +8,7 @@
 - 🎙️ **Lokale Spracherkennung** — Whisper (medium, Deutsch)
 - 🔊 **Lokale TTS-Stimme** — Thorsten (Coqui TTS, Deutsche Stimme)
 - 🌐 **OpenClaw Integration** — Dein persönlicher AI Assistant
+- 🐰 **RabbitMQ Support** — Robuste Kommunikation via AMQP (optional)
 
 ## Hardware
 
@@ -34,6 +35,30 @@ source venv/bin/activate
 python -m src.javis
 ```
 
+## Kommunikation mit OpenClaw
+
+### Option 1: HTTP (Standard)
+
+```yaml
+openclaw:
+  gateway_url: "http://OPENCLAW_HOST:18789"
+```
+
+### Option 2: RabbitMQ (Robust)
+
+```yaml
+rabbitmq:
+  enabled: true
+  host: "RABBITMQ_HOST"
+  port: 5672
+  username: "test"
+  password: "test123"
+  queue: "javis.voice.in"
+  reply_queue: "javis.voice.out"
+```
+
+Siehe [openclaw-rabbitmq-plugin/README.md](openclaw-rabbitmq-plugin/README.md) für Details.
+
 ## Wake Word aktivieren
 
 1. **Kostenloser Picovoice Access Key:**
@@ -47,23 +72,54 @@ python -m src.javis
 
 ## Architektur
 
+### HTTP Modus
+
+```
+[JavisVoice] ──HTTP──> [OpenClaw Gateway]
+```
+
+### RabbitMQ Modus
+
+```
+[JavisVoice] ──AMQP──> [RabbitMQ] ──consume──> [OpenClaw Plugin] ──> [Agent]
+                              ▲
+                              │
+                    [Response Queue]
+                              ▲
+                              │
+                    [OpenClaw] ──publish──> [RabbitMQ] ──AMQP──> [JavisVoice]
+```
+
 Siehe [ARCHITECTURE.md](ARCHITECTURE.md) für Details.
 
 ## Projektstruktur
 
 ```
 Javisspeach/
-├── config/config.yaml       # Konfiguration
+├── ARCHITECTURE.md           # Architektur-Dokumentation
+├── config/
+│   └── config.yaml           # Konfiguration
 ├── src/
-│   ├── javis.py            # Hauptprogramm
-│   ├── wakeword/           # Porcupine Wake Word
-│   ├── vad/                # WebRTC VAD
-│   ├── stt/                # Whisper STT
-│   ├── tts/                # Thorsten TTS
-│   └── api/                # OpenClaw Client
+│   ├── javis.py              # Hauptprogramm
+│   ├── wakeword/             # Porcupine Wake Word
+│   │   └── porcupine_wake.py
+│   ├── vad/                  # WebRTC VAD
+│   │   └── webrtc_vad.py
+│   ├── stt/                  # Whisper STT
+│   │   └── whisper_stt.py
+│   ├── tts/                  # Thorsten TTS
+│   │   └── thorsten_tts.py
+│   └── api/                  # Kommunikation
+│       ├── openclaw_client.py    # HTTP Client
+│       └── rabbitmq_client.py    # RabbitMQ Client
 ├── scripts/
-│   ├── install.sh          # Setup-Script
-│   └── test_audio.sh       # Audio-Test
+│   ├── install.sh            # Setup-Script
+│   └── test_audio.sh         # Audio-Test
+├── openclaw-rabbitmq-plugin/ # OpenClaw Plugin (optional)
+│   ├── openclaw.plugin.json
+│   ├── index.ts
+│   ├── package.json
+│   └── README.md
 └── requirements.txt
 ```
 
@@ -85,5 +141,5 @@ pavucontrol
 **Problem:** Whisper zu langsam
 → In `config/config.yaml` auf `small` oder `tiny` wechseln
 
-**Problem:** TTS klingt abgeschnitten
-→ Siehe [TTS Troubleshooting](https://github.com/coqui-ai/TTS)
+**Problem:** RabbitMQ Verbindung fehlgeschlagen
+→ Siehe [openclaw-rabbitmq-plugin/README.md](openclaw-rabbitmq-plugin/README.md)

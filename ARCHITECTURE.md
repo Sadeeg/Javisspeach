@@ -147,6 +147,8 @@ USB Mic ──────────────────► Raspberry Pi �
 
 ## API-Integration (OpenClaw)
 
+### HTTP Modus
+
 ```python
 # POST /v1/voice/process
 {
@@ -158,9 +160,65 @@ USB Mic ──────────────────► Raspberry Pi �
 # Response
 {
     "response": "Das Licht ist jetzt an.",
-    "audio_url": null,  # Wir nutzen lokale TTS
     "session_id": "rpi-001"
 }
+```
+
+### RabbitMQ Modus
+
+**Message Queue Architektur:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       RabbitMQ Server                            │
+│                                                                  │
+│  ┌─────────────────┐              ┌─────────────────┐           │
+│  │ javis.voice.in  │              │ javis.voice.out │           │
+│  │   (Inbound)     │              │   (Outbound)    │           │
+│  │                 │              │                 │           │
+│  │ Pi ──────────▶  │              │  OpenClaw ────▶ │           │
+│  └─────────────────┘              └─────────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Message Format (Inbound):**
+```json
+{
+    "sessionId": "pi-001-abc123",
+    "text": "Hallo Javis, wie wird das Wetter?",
+    "timestamp": 1743168000000
+}
+```
+
+**Message Format (Outbound):**
+```json
+{
+    "sessionId": "pi-001-abc123",
+    "response": "Morgen wird das Wetter sonnig.",
+    "timestamp": 1743168005000
+}
+```
+
+**OpenClaw Plugin:**
+- Verbindet automatisch mit RabbitMQ beim Gateway-Start
+- Konsumiert von `javis.voice.in`
+- Published Responses zu `javis.voice.out`
+- Service: automatisches Reconnect bei Verbindungsverlust
+
+**Python Client:**
+```python
+from rabbitmq_client import JavisRabbitMQ
+
+client = JavisRabbitMQ(host='RABBITMQ_HOST')
+client.connect()
+
+# Synchron (blockiert bis Antwort)
+response = client.send_and_wait("Hallo Javis!")
+
+# Async mit Callback
+client.send_async("Hallo Javis!", lambda r: play_audio(r))
+
+client.close()
 ```
 
 ## Troubleshooting
@@ -168,3 +226,4 @@ USB Mic ──────────────────► Raspberry Pi �
 - **Wake Word reagiert nicht:** Mikrofon-Pegel prüfen (`alsamixer`)
 - **Whisper zu langsam:** `small` statt `medium` Modell nutzen
 - **TTS ruckelt:** HDMI-Audio deaktivieren, USB-Speaker nutzen
+- **RabbitMQ Access Denied:** Benutzer + Rechte prüfen (`rabbitmqctl list_permissions`)
